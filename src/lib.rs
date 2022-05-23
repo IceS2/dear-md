@@ -4,8 +4,8 @@ mod style;
 
 use handler::{EventHandler, StdoutHandler};
 use pulldown_cmark::{Options, Parser};
-use style::StyleSetBuilder;
 use std::{fs, path::PathBuf};
+use style::StyleSetBuilder;
 
 pub fn print_markdown_file(file: PathBuf) {
     let file_content = fs::read_to_string(file).unwrap();

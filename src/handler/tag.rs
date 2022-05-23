@@ -1,9 +1,7 @@
 use super::StdoutHandler;
 
 use crate::context::Context;
-use crate::style::{
-    BlockQuoteStyle, Style, StyleSet,
-};
+use crate::style::{BlockQuoteStyle, Style, StyleSet};
 
 use crossterm::style::{Attribute, Stylize};
 use pulldown_cmark::{CodeBlockKind, HeadingLevel, Tag};
@@ -20,7 +18,13 @@ pub(crate) fn capitalize(s: &str) -> String {
 pub(crate) trait TagHandler<'a> {
     fn start(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet);
     fn end(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler);
-    fn handle_text(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet, text: &str);
+    fn handle_text(
+        &self,
+        context: &mut Context<'a>,
+        stdout: &mut StdoutHandler,
+        style_set: &StyleSet,
+        text: &str,
+    );
 }
 
 impl<'a> TagHandler<'a> for Tag<'a> {
@@ -123,7 +127,13 @@ impl<'a> TagHandler<'a> for Tag<'a> {
         }
     }
 
-    fn handle_text(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet, text: &str) {
+    fn handle_text(
+        &self,
+        context: &mut Context<'a>,
+        stdout: &mut StdoutHandler,
+        style_set: &StyleSet,
+        text: &str,
+    ) {
         match self {
             Tag::CodeBlock(_) => {
                 for line in text.lines() {
@@ -133,7 +143,8 @@ impl<'a> TagHandler<'a> for Tag<'a> {
                         "",
                         width = (style_set.code_block().width() - line.len())
                     );
-                    let ranges: Vec<(syntect::highlighting::Style, &str)> = style_set.code_block()
+                    let ranges: Vec<(syntect::highlighting::Style, &str)> = style_set
+                        .code_block()
                         .highlight_lines(context.code_block_syntax())
                         .highlight_line(&formatted_line, style_set.code_block().syntax_set())
                         .unwrap();
@@ -157,7 +168,9 @@ impl<'a> TagHandler<'a> for Tag<'a> {
             _ => {
                 let mut style = match context.current_block() {
                     Tag::Paragraph => style_set.paragraph().style(),
-                    Tag::Heading(level, ..) => style_set.heading(HeadingLevelWrapper::new(level).into()).style(),
+                    Tag::Heading(level, ..) => style_set
+                        .heading(HeadingLevelWrapper::new(level).into())
+                        .style(),
                     Tag::BlockQuote => style_set.block_quote().style(),
                     Tag::List(order) => match order {
                         Some(_) => style_set.ordered_list().style(),

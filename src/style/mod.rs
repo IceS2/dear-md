@@ -104,7 +104,6 @@ pub(crate) struct StyleSetBuilder {
     code_block: Option<CodeBlockStyle>,
 
     rule: Option<RuleStyle>,
-
 }
 
 impl StyleSetBuilder {
@@ -141,7 +140,7 @@ impl StyleSetBuilder {
         self
     }
 
-   pub(crate) fn block_quote(mut self, block_quote: BlockQuoteStyle) -> Self {
+    pub(crate) fn block_quote(mut self, block_quote: BlockQuoteStyle) -> Self {
         self.block_quote = Some(block_quote);
         self
     }
@@ -163,15 +162,23 @@ impl StyleSetBuilder {
 
     pub(crate) fn build(self) -> StyleSet {
         StyleSet {
-            heading: self.heading.unwrap_or_else(|| vec![HeadingStyle::default()]),
+            heading: self
+                .heading
+                .unwrap_or_else(|| vec![HeadingStyle::default()]),
             paragraph: self.paragraph.unwrap_or_else(|| ParagraphStyle::default()),
-            unordered_list: self.unordered_list.unwrap_or_else(|| UnorderedListStyle::default()),
-            ordered_list: self.ordered_list.unwrap_or_else(|| OrderedListStyle::default()),
-            block_quote: self.block_quote.unwrap_or_else(|| BlockQuoteStyle::default()),
+            unordered_list: self
+                .unordered_list
+                .unwrap_or_else(|| UnorderedListStyle::default()),
+            ordered_list: self
+                .ordered_list
+                .unwrap_or_else(|| OrderedListStyle::default()),
+            block_quote: self
+                .block_quote
+                .unwrap_or_else(|| BlockQuoteStyle::default()),
             code: self.code.unwrap_or_else(|| CodeStyle::default()),
             code_block: self.code_block.unwrap_or_else(|| CodeBlockStyle::default()),
             rule: self.rule.unwrap_or_else(|| RuleStyle::default()),
-            default: DefaultStyle::default()
+            default: DefaultStyle::default(),
         }
     }
 }

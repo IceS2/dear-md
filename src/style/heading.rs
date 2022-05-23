@@ -2,7 +2,7 @@ use super::Style;
 use crossterm::style::{Attribute, Color, ContentStyle, Stylize};
 
 pub(crate) struct HeadingStyle {
-    style: ContentStyle
+    style: ContentStyle,
 }
 
 impl HeadingStyle {
@@ -26,4 +26,3 @@ impl Default for HeadingStyle {
         HeadingStyle::new(style)
     }
 }
-
