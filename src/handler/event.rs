@@ -1,39 +1,36 @@
-use crossterm::style::ContentStyle;
 use pulldown_cmark::Event;
 
 use crate::context::Context;
-use crate::style::{CodeStyle, RuleStyle, Style};
+use crate::style::{Style, StyleSet};
 
 use super::{StdoutHandler, TagHandler};
 
 pub(crate) trait EventHandler<'a> {
-    fn handle(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler);
+    fn handle(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet);
 }
 
 impl<'a> EventHandler<'a> for Event<'a> {
-    fn handle(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler) {
+    fn handle(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet) {
         match self {
-            Event::Start(tag) => tag.start(context, stdout),
+            Event::Start(tag) => tag.start(context, stdout, style_set),
             Event::End(tag) => tag.end(context, stdout),
             Event::Text(text) => {
                 context
                     .current_block()
                     .clone()
-                    .handle_text(context, stdout, &text);
+                    .handle_text(context, stdout, style_set, &text);
             }
             Event::Code(text) => {
-                let code_style = CodeStyle::default();
-                stdout.queue_styled_content(&text, code_style.style());
+                stdout.queue_styled_content(&text, style_set.code().style());
             }
             Event::SoftBreak => {
-                stdout.queue_styled_content("\n", ContentStyle::new());
+                stdout.queue_styled_content("\n", style_set.default().style());
             }
             Event::HardBreak => {
-                stdout.queue_styled_content("\n", ContentStyle::new());
+                stdout.queue_styled_content("\n", style_set.default().style());
             }
             Event::Rule => {
-                let rule_style = RuleStyle::default();
-                stdout.queue_styled_content(rule_style.rule(), rule_style.style());
+                stdout.queue_styled_content(style_set.rule().rule(), style_set.rule().style());
             }
             _ => (),
         }

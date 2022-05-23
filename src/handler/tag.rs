@@ -2,7 +2,7 @@ use super::StdoutHandler;
 
 use crate::context::Context;
 use crate::style::{
-    self, BlockQuoteStyle, CodeBlockStyle, OrderedListStyle, Style, UnorderedListStyle,
+    BlockQuoteStyle, Style, StyleSet,
 };
 
 use crossterm::style::{Attribute, Stylize};
@@ -18,14 +18,14 @@ pub(crate) fn capitalize(s: &str) -> String {
 }
 
 pub(crate) trait TagHandler<'a> {
-    fn start(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler);
+    fn start(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet);
     fn end(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler);
-    fn handle_text(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, text: &str);
+    fn handle_text(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet, text: &str);
 }
 
 impl<'a> TagHandler<'a> for Tag<'a> {
     //  TODO: Think about having a prefix modifier with some lifecycle instead of actually queuing here
-    fn start(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler) {
+    fn start(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet) {
         match self {
             Tag::Paragraph => {
                 context.set_current_block(self.clone());
@@ -46,12 +46,11 @@ impl<'a> TagHandler<'a> for Tag<'a> {
                 }
             }
             Tag::BlockQuote => {
-                let block_quote_style = BlockQuoteStyle::default();
                 context.set_current_block(self.clone());
                 stdout.queue_content(&format!("{:width$}", "", width = context.indentation() * 2));
                 stdout.queue_styled_content(
-                    &format!("{} ", block_quote_style.character()),
-                    block_quote_style.style(),
+                    &format!("{} ", style_set.block_quote().character()),
+                    style_set.block_quote().style(),
                 );
             }
             Tag::List(_) => {
@@ -72,18 +71,16 @@ impl<'a> TagHandler<'a> for Tag<'a> {
                 let current_block = context.current_block().clone();
                 match current_block {
                     Tag::List(Some(order)) => {
-                        let ordered_list_style = OrderedListStyle::default();
                         stdout.queue_styled_content(
-                            &format!("{}{} ", order, ordered_list_style.character()),
-                            ordered_list_style.style(),
+                            &format!("{}{} ", order, style_set.ordered_list().character()),
+                            style_set.ordered_list().style(),
                         );
                         context.set_current_block(Tag::List(Some(order + 1)));
                     }
                     _ => {
-                        let unoredered_list_style = UnorderedListStyle::default();
                         stdout.queue_styled_content(
-                            &format!("{} ", unoredered_list_style.character()),
-                            unoredered_list_style.style(),
+                            &format!("{} ", style_set.unordered_list().character()),
+                            style_set.unordered_list().style(),
                         );
                     }
                 }
@@ -126,20 +123,19 @@ impl<'a> TagHandler<'a> for Tag<'a> {
         }
     }
 
-    fn handle_text(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, text: &str) {
+    fn handle_text(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet, text: &str) {
         match self {
             Tag::CodeBlock(_) => {
-                let code_block_style = CodeBlockStyle::default();
                 for line in text.lines() {
                     let formatted_line = format!(
                         "{}{:>width$}\n",
                         line,
                         "",
-                        width = (code_block_style.width() - line.len())
+                        width = (style_set.code_block().width() - line.len())
                     );
-                    let ranges: Vec<(syntect::highlighting::Style, &str)> = code_block_style
+                    let ranges: Vec<(syntect::highlighting::Style, &str)> = style_set.code_block()
                         .highlight_lines(context.code_block_syntax())
-                        .highlight_line(&formatted_line, code_block_style.syntax_set())
+                        .highlight_line(&formatted_line, style_set.code_block().syntax_set())
                         .unwrap();
                     let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
                     stdout.queue_content(&format!(
@@ -153,24 +149,21 @@ impl<'a> TagHandler<'a> for Tag<'a> {
             }
             Tag::List(order) => {
                 let list_style = match order {
-                    Some(_) => OrderedListStyle::default().style(),
-                    None => UnorderedListStyle::default().style(),
+                    Some(_) => style_set.ordered_list().style(),
+                    None => style_set.unordered_list().style(),
                 };
                 stdout.queue_styled_content(&text, list_style);
             }
             _ => {
                 let mut style = match context.current_block() {
-                    Tag::Paragraph => style::ParagraphStyle::default().style(),
-                    Tag::Heading(level, ..) => match level {
-                        HeadingLevel::H1 => style::HeadingStyle1::default().style(),
-                        _ => style::HeadingStyle2::default().style(),
-                    },
-                    Tag::BlockQuote => style::BlockQuoteStyle::default().style(),
+                    Tag::Paragraph => style_set.paragraph().style(),
+                    Tag::Heading(level, ..) => style_set.heading(HeadingLevelWrapper::new(level).into()).style(),
+                    Tag::BlockQuote => style_set.block_quote().style(),
                     Tag::List(order) => match order {
-                        Some(_) => style::OrderedListStyle::default().style(),
-                        None => style::UnorderedListStyle::default().style(),
+                        Some(_) => style_set.ordered_list().style(),
+                        None => style_set.unordered_list().style(),
                     },
-                    _ => style::DefaultStyle::default().style(),
+                    _ => style_set.default().style(),
                 };
                 for modifier in context.modifiers() {
                     style = style.attribute(*modifier)
@@ -178,6 +171,27 @@ impl<'a> TagHandler<'a> for Tag<'a> {
                 stdout.queue_content(&format!("{:width$}", "", width = context.indentation() * 2));
                 stdout.queue_styled_content(&text, style);
             }
+        }
+    }
+}
+
+struct HeadingLevelWrapper(HeadingLevel);
+
+impl HeadingLevelWrapper {
+    fn new(level: &HeadingLevel) -> Self {
+        Self(level.clone())
+    }
+}
+
+impl From<HeadingLevelWrapper> for usize {
+    fn from(level_wrapper: HeadingLevelWrapper) -> Self {
+        match level_wrapper.0 {
+            HeadingLevel::H1 => 0,
+            HeadingLevel::H2 => 1,
+            HeadingLevel::H3 => 2,
+            HeadingLevel::H4 => 3,
+            HeadingLevel::H5 => 4,
+            HeadingLevel::H6 => 5,
         }
     }
 }

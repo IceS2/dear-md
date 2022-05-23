@@ -4,6 +4,7 @@ mod style;
 
 use handler::{EventHandler, StdoutHandler};
 use pulldown_cmark::{Options, Parser};
+use style::StyleSetBuilder;
 use std::{fs, path::PathBuf};
 
 pub fn print_markdown_file(file: PathBuf) {
@@ -11,10 +12,13 @@ pub fn print_markdown_file(file: PathBuf) {
 
     let mut context = context::Context::default();
     let mut stdout = StdoutHandler::default();
+
+    let style_set = StyleSetBuilder::new().build();
+
     let parser = Parser::new_ext(&file_content, Options::empty());
 
     for event in parser {
-        event.handle(&mut context, &mut stdout);
+        event.handle(&mut context, &mut stdout, &style_set);
     }
 
     stdout.flush();
