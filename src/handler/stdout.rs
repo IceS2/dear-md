@@ -1,8 +1,10 @@
 use crossterm::{
     queue,
-    style::{ContentStyle, Print, PrintStyledContent, ResetColor},
+    style::{Print, PrintStyledContent, ResetColor},
 };
 use std::io::{stdout, Stdout, Write};
+
+use crate::style::Content;
 
 pub(crate) struct StdoutHandler {
     stdout: Stdout,
@@ -12,19 +14,20 @@ impl StdoutHandler {
     fn new() -> Self {
         Self { stdout: stdout() }
     }
-    pub(crate) fn queue_content(&mut self, content: &str) -> () {
-        queue!(self.stdout, Print(content.to_owned())).unwrap();
+
+    pub(crate) fn queue_styled_content_v2(&mut self, contents: Vec<Content>) -> () {
+        for content in contents {
+            match content {
+                Content::StyledContent(content) => {
+                    queue!(self.stdout, PrintStyledContent(content)).unwrap()
+                }
+                Content::String(content) => queue!(self.stdout, Print(content)).unwrap(),
+            }
+            self.reset_color();
+        }
     }
 
-    pub(crate) fn queue_styled_content(&mut self, content: &str, style: ContentStyle) -> () {
-        queue!(
-            self.stdout,
-            PrintStyledContent(style.apply(content.to_owned()))
-        )
-        .unwrap();
-    }
-
-    pub(crate) fn reset_color(&mut self) -> () {
+    fn reset_color(&mut self) -> () {
         queue!(self.stdout, ResetColor).unwrap();
     }
 

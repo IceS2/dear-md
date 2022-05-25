@@ -22,10 +22,11 @@ pub(crate) use code::CodeStyle;
 pub(crate) mod code_block;
 pub(crate) use code_block::CodeBlockStyle;
 
-use crossterm::style::ContentStyle;
+use crossterm::style::{Color, ContentStyle, StyledContent, Stylize};
 
-pub(crate) trait Style {
-    fn style(&self) -> ContentStyle;
+pub(crate) enum Content {
+    String(String),
+    StyledContent(StyledContent<String>),
 }
 
 pub(crate) struct StyleSet {
@@ -162,9 +163,12 @@ impl StyleSetBuilder {
 
     pub(crate) fn build(self) -> StyleSet {
         StyleSet {
-            heading: self
-                .heading
-                .unwrap_or_else(|| vec![HeadingStyle::default()]),
+            heading: self.heading.unwrap_or_else(|| {
+                vec![
+                    HeadingStyle::new(ContentStyle::new().with(Color::Blue)),
+                    HeadingStyle::default(),
+                ]
+            }),
             paragraph: self.paragraph.unwrap_or_else(|| ParagraphStyle::default()),
             unordered_list: self
                 .unordered_list

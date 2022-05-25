@@ -1,4 +1,6 @@
-use super::Style;
+use crate::context::Context;
+
+use super::Content;
 use crossterm::style::{Color, ContentStyle, Stylize};
 
 pub(crate) struct UnorderedListStyle {
@@ -14,14 +16,23 @@ impl UnorderedListStyle {
         }
     }
 
-    pub(crate) fn character(&self) -> &str {
-        &self.character
-    }
-}
+    pub(crate) fn get_styled_content(&self, text: &str, context: &Context) -> Vec<Content> {
+        let mut contents: Vec<Content> = vec![];
+        let mut style = self.style;
+        if context.start_of_line().to_owned() {
+            contents.push(Content::StyledContent(style.apply(format!(
+                "\n{:width$}{character} ",
+                "",
+                width = context.indentation() * 2,
+                character = self.character
+            ))));
+        }
+        for modifier in context.modifiers() {
+            style = style.attribute(*modifier)
+        }
 
-impl Style for UnorderedListStyle {
-    fn style(&self) -> ContentStyle {
-        self.style
+        contents.push(Content::StyledContent(style.apply(text.to_string())));
+        contents
     }
 }
 
@@ -48,14 +59,29 @@ impl OrderedListStyle {
         }
     }
 
-    pub(crate) fn character(&self) -> &str {
-        &self.character
-    }
-}
+    pub(crate) fn get_styled_content(
+        &self,
+        text: &str,
+        context: &Context,
+        order: &u64,
+    ) -> Vec<Content> {
+        let mut contents: Vec<Content> = vec![];
+        let mut style = self.style;
+        if context.start_of_line().to_owned() {
+            contents.push(Content::StyledContent(style.apply(format!(
+                "\n{:width$}{order}{character} ",
+                "",
+                order = order,
+                width = context.indentation() * 2,
+                character = self.character
+            ))));
+        }
+        for modifier in context.modifiers() {
+            style = style.attribute(*modifier)
+        }
 
-impl Style for OrderedListStyle {
-    fn style(&self) -> ContentStyle {
-        self.style
+        contents.push(Content::StyledContent(style.apply(text.to_string())));
+        contents
     }
 }
 

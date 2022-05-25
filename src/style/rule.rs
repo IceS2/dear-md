@@ -1,4 +1,4 @@
-use super::Style;
+use super::Content;
 use crossterm::style::{Color, ContentStyle, Stylize};
 
 pub(crate) struct RuleStyle {
@@ -14,14 +14,8 @@ impl RuleStyle {
         }
     }
 
-    pub(crate) fn rule(&self) -> &str {
-        &self.rule
-    }
-}
-
-impl Style for RuleStyle {
-    fn style(&self) -> ContentStyle {
-        self.style
+    pub(crate) fn get_styled_content(&self) -> Vec<Content> {
+        vec![Content::StyledContent(self.style.apply(self.rule.clone()))]
     }
 }
 

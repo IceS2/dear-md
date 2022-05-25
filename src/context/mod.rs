@@ -7,6 +7,7 @@ pub(crate) struct Context<'a> {
     code_block_syntax: String,
     indentation: usize,
     modifiers: Vec<Attribute>,
+    start_of_line: bool,
 }
 
 impl<'a> Context<'a> {
@@ -16,6 +17,7 @@ impl<'a> Context<'a> {
             code_block_syntax: "Plain Text".to_owned(),
             indentation: 0,
             modifiers: vec![],
+            start_of_line: true,
         }
     }
 
@@ -41,6 +43,14 @@ impl<'a> Context<'a> {
 
     pub(crate) fn set_indentation(&mut self, level: usize) -> () {
         self.indentation = level;
+    }
+
+    pub(crate) fn start_of_line(&self) -> &bool {
+        &self.start_of_line
+    }
+
+    pub(crate) fn set_start_of_line(&mut self, start_of_line: bool) {
+        self.start_of_line = start_of_line;
     }
 
     pub(crate) fn modifiers(&self) -> &Vec<Attribute> {

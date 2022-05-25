@@ -1,13 +1,12 @@
 use super::StdoutHandler;
 
 use crate::context::Context;
-use crate::style::{BlockQuoteStyle, Style, StyleSet};
+use crate::style::{Content, StyleSet};
 
-use crossterm::style::{Attribute, Stylize};
+use crossterm::style::Attribute;
 use pulldown_cmark::{CodeBlockKind, HeadingLevel, Tag};
-use syntect::util::as_24_bit_terminal_escaped;
 
-pub(crate) fn capitalize(s: &str) -> String {
+fn capitalize(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
         None => String::new(),
@@ -16,7 +15,7 @@ pub(crate) fn capitalize(s: &str) -> String {
 }
 
 pub(crate) trait TagHandler<'a> {
-    fn start(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet);
+    fn start(&self, context: &mut Context<'a>);
     fn end(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler);
     fn handle_text(
         &self,
@@ -29,10 +28,15 @@ pub(crate) trait TagHandler<'a> {
 
 impl<'a> TagHandler<'a> for Tag<'a> {
     //  TODO: Think about having a prefix modifier with some lifecycle instead of actually queuing here
-    fn start(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler, style_set: &StyleSet) {
+    fn start(&self, context: &mut Context<'a>) {
         match self {
             Tag::Paragraph => {
-                context.set_current_block(self.clone());
+                if std::mem::discriminant(context.current_block())
+                    != std::mem::discriminant(&Tag::BlockQuote)
+                {
+                    context.set_current_block(self.clone());
+                }
+                context.set_start_of_line(true);
             }
             Tag::Heading(..) => {
                 context.set_current_block(self.clone());
@@ -51,11 +55,6 @@ impl<'a> TagHandler<'a> for Tag<'a> {
             }
             Tag::BlockQuote => {
                 context.set_current_block(self.clone());
-                stdout.queue_content(&format!("{:width$}", "", width = context.indentation() * 2));
-                stdout.queue_styled_content(
-                    &format!("{} ", style_set.block_quote().character()),
-                    style_set.block_quote().style(),
-                );
             }
             Tag::List(_) => {
                 if std::mem::discriminant(context.current_block())
@@ -66,31 +65,14 @@ impl<'a> TagHandler<'a> for Tag<'a> {
                 context.set_current_block(self.clone());
             }
             Tag::Item => {
-                stdout.queue_content(&format!(
-                    "\n{:width$}",
-                    "",
-                    width = context.indentation() * 2
-                ));
-
-                let current_block = context.current_block().clone();
-                match current_block {
-                    Tag::List(Some(order)) => {
-                        stdout.queue_styled_content(
-                            &format!("{}{} ", order, style_set.ordered_list().character()),
-                            style_set.ordered_list().style(),
-                        );
-                        context.set_current_block(Tag::List(Some(order + 1)));
-                    }
-                    _ => {
-                        stdout.queue_styled_content(
-                            &format!("{} ", style_set.unordered_list().character()),
-                            style_set.unordered_list().style(),
-                        );
-                    }
-                }
+                context.set_start_of_line(true);
             }
-            Tag::Emphasis => context.add_modifier(Attribute::Underlined),
-            Tag::Strong => context.add_modifier(Attribute::Bold),
+            Tag::Emphasis => {
+                context.add_modifier(Attribute::Underlined);
+            }
+            Tag::Strong => {
+                context.add_modifier(Attribute::Bold);
+            }
             _ => (),
         }
     }
@@ -98,25 +80,33 @@ impl<'a> TagHandler<'a> for Tag<'a> {
     fn end(&self, context: &mut Context<'a>, stdout: &mut StdoutHandler) {
         match self {
             Tag::Paragraph => {
-                stdout.queue_content("\n\n");
+                stdout.queue_styled_content_v2(vec![Content::String("\n\n".to_string())]);
             }
             Tag::Heading(..) => {
-                stdout.queue_content("\n\n");
+                stdout.queue_styled_content_v2(vec![Content::String("\n\n".to_string())]);
             }
             Tag::CodeBlock(..) => {
                 context.set_indentation(context.indentation() - 1);
-                stdout.queue_content("\n");
+                stdout.queue_styled_content_v2(vec![Content::String("\n".to_string())]);
             }
             Tag::BlockQuote => {
-                stdout.queue_content("\n");
+                stdout.queue_styled_content_v2(vec![Content::String("\n".to_string())]);
             }
             Tag::List(_) => {
                 if context.indentation() > &0 {
                     context.set_indentation(context.indentation() - 1);
                 }
-                stdout.queue_content("\n");
+                stdout.queue_styled_content_v2(vec![Content::String("\n".to_string())]);
             }
-            Tag::Item => (),
+            Tag::Item => {
+                let current_block = context.current_block().clone();
+                match current_block {
+                    Tag::List(Some(order)) => {
+                        context.set_current_block(Tag::List(Some(order + 1)));
+                    }
+                    _ => {}
+                }
+            }
             Tag::Emphasis => {
                 context.remove_modifier(Attribute::Underlined);
             }
@@ -136,55 +126,35 @@ impl<'a> TagHandler<'a> for Tag<'a> {
     ) {
         match self {
             Tag::CodeBlock(_) => {
-                for line in text.lines() {
-                    let formatted_line = format!(
-                        "{}{:>width$}\n",
-                        line,
-                        "",
-                        width = (style_set.code_block().width() - line.len())
-                    );
-                    let ranges: Vec<(syntect::highlighting::Style, &str)> = style_set
-                        .code_block()
-                        .highlight_lines(context.code_block_syntax())
-                        .highlight_line(&formatted_line, style_set.code_block().syntax_set())
-                        .unwrap();
-                    let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
-                    stdout.queue_content(&format!(
-                        "{:width$}",
-                        "",
-                        width = context.indentation() * 2
-                    ));
-                    stdout.queue_content(&escaped);
-                    stdout.reset_color();
-                }
+                stdout.queue_styled_content_v2(
+                    style_set.code_block().get_styled_content(text, context),
+                );
             }
             Tag::List(order) => {
-                let list_style = match order {
-                    Some(_) => style_set.ordered_list().style(),
-                    None => style_set.unordered_list().style(),
+                let content = match order {
+                    Some(o) => style_set
+                        .ordered_list()
+                        .get_styled_content(text, context, o),
+                    None => style_set.unordered_list().get_styled_content(text, context),
                 };
-                stdout.queue_styled_content(&text, list_style);
+                stdout.queue_styled_content_v2(content);
+            }
+            Tag::BlockQuote => {
+                let styled_content = style_set.block_quote().get_styled_content(text, context);
+                stdout.queue_styled_content_v2(styled_content)
             }
             _ => {
-                let mut style = match context.current_block() {
-                    Tag::Paragraph => style_set.paragraph().style(),
+                let contents = match context.current_block() {
+                    Tag::Paragraph => style_set.paragraph().get_styled_content(text, context),
                     Tag::Heading(level, ..) => style_set
                         .heading(HeadingLevelWrapper::new(level).into())
-                        .style(),
-                    Tag::BlockQuote => style_set.block_quote().style(),
-                    Tag::List(order) => match order {
-                        Some(_) => style_set.ordered_list().style(),
-                        None => style_set.unordered_list().style(),
-                    },
-                    _ => style_set.default().style(),
+                        .get_styled_content(text, context),
+                    _ => style_set.default().get_styled_content(text, context),
                 };
-                for modifier in context.modifiers() {
-                    style = style.attribute(*modifier)
-                }
-                stdout.queue_content(&format!("{:width$}", "", width = context.indentation() * 2));
-                stdout.queue_styled_content(&text, style);
+                stdout.queue_styled_content_v2(contents);
             }
         }
+        context.set_start_of_line(false);
     }
 }
 
